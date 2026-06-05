@@ -4,7 +4,7 @@ const isWindows = process.platform === "win32";
 const nextBin = isWindows
   ? "node_modules/next/dist/bin/next"
   : "node_modules/next/dist/bin/next";
-const url = "http://127.0.0.1:3000";
+const url = "http://localhost:3100";
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -37,9 +37,23 @@ function run(command, args, options = {}) {
   });
 }
 
+function stopProcessTree(child) {
+  if (!child.pid) return;
+
+  if (isWindows) {
+    spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+      stdio: "ignore",
+      shell: true,
+    });
+    return;
+  }
+
+  child.kill("SIGTERM");
+}
+
 const server = spawn(
   "node",
-  [nextBin, "dev", "-H", "127.0.0.1", "-p", "3000"],
+  [nextBin, "dev", "-H", "localhost", "-p", "3100"],
   {
     stdio: "inherit",
     shell: isWindows,
@@ -60,5 +74,5 @@ try {
   );
   process.exitCode = Number(code);
 } finally {
-  server.kill();
+  stopProcessTree(server);
 }

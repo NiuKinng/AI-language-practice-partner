@@ -1,0 +1,63 @@
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  getAssessmentProviderId,
+  getPronunciationProviderId,
+  getVoiceProviderId,
+} from "@/lib/providers/config";
+import { openAiRealtimeProvider } from "@/lib/providers/openai-realtime";
+
+const originalEnv = { ...process.env };
+
+afterEach(() => {
+  process.env = { ...originalEnv };
+});
+
+describe("provider config", () => {
+  it("uses the current OpenAI providers by default", () => {
+    delete process.env.VOICE_PROVIDER;
+    delete process.env.ASSESSMENT_PROVIDER;
+    delete process.env.PRONUNCIATION_PROVIDER;
+
+    expect(getVoiceProviderId()).toBe("openai-realtime");
+    expect(getAssessmentProviderId()).toBe("openai-assessment");
+    expect(getPronunciationProviderId()).toBe("demo");
+  });
+
+  it("accepts planned domestic provider ids without changing current behavior", () => {
+    process.env.VOICE_PROVIDER = "aliyun-qwen-omni";
+    process.env.PRONUNCIATION_PROVIDER = "tencent-soe";
+
+    expect(getVoiceProviderId()).toBe("aliyun-qwen-omni");
+    expect(getPronunciationProviderId()).toBe("tencent-soe");
+  });
+
+  it("falls back on unknown provider ids", () => {
+    process.env.VOICE_PROVIDER = "unknown";
+    process.env.ASSESSMENT_PROVIDER = "unknown";
+    process.env.PRONUNCIATION_PROVIDER = "unknown";
+
+    expect(getVoiceProviderId()).toBe("openai-realtime");
+    expect(getAssessmentProviderId()).toBe("openai-assessment");
+    expect(getPronunciationProviderId()).toBe("demo");
+  });
+});
+
+describe("openAiRealtimeProvider", () => {
+  it("returns a demo realtime session when OPENAI_API_KEY is missing", async () => {
+    delete process.env.OPENAI_API_KEY;
+
+    const session = await openAiRealtimeProvider.createSession({
+      scenarioId: "interview",
+      level: "intermediate",
+      correctionMode: "post_session",
+      voice: "coral",
+    });
+
+    expect(session).toMatchObject({
+      provider: "openai-realtime",
+      demo: true,
+      clientSecret: "demo-client-secret",
+      model: "gpt-realtime",
+    });
+  });
+});
