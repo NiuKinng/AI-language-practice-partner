@@ -34,6 +34,7 @@ export const openAiRealtimeProvider: VoiceProvider = {
         sessionId: crypto.randomUUID(),
         expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
         model,
+        transport: "webrtc",
       };
     }
 
@@ -85,6 +86,7 @@ export const openAiRealtimeProvider: VoiceProvider = {
           ? new Date(payload.expires_at * 1000).toISOString()
           : new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       model,
+      transport: "webrtc",
     };
   },
 };

@@ -4,6 +4,7 @@ import {
   getPronunciationProviderId,
   getVoiceProviderId,
 } from "@/lib/providers/config";
+import { aliyunQwenOmniProvider } from "@/lib/providers/aliyun-qwen-omni";
 import { openAiRealtimeProvider } from "@/lib/providers/openai-realtime";
 
 const originalEnv = { ...process.env };
@@ -59,5 +60,50 @@ describe("openAiRealtimeProvider", () => {
       clientSecret: "demo-client-secret",
       model: "gpt-realtime",
     });
+  });
+});
+
+describe("aliyunQwenOmniProvider", () => {
+  it("returns a demo session when Aliyun credentials are missing", async () => {
+    delete process.env.DASHSCOPE_API_KEY;
+    delete process.env.ALIYUN_REALTIME_WS_URL;
+
+    const session = await aliyunQwenOmniProvider.createSession({
+      scenarioId: "restaurant",
+      level: "beginner",
+      correctionMode: "post_session",
+      voice: "coral",
+    });
+
+    expect(session).toMatchObject({
+      provider: "aliyun-qwen-omni",
+      demo: true,
+      clientSecret: "demo-aliyun-session",
+      model: "qwen3.5-omni-plus-realtime",
+      transport: "websocket",
+      wsUrl: "ws://localhost:3101/aliyun/realtime",
+    });
+    expect(session.instructions).toContain("Ordering Food");
+  });
+
+  it("returns a WebSocket proxy session when Aliyun credentials are configured", async () => {
+    process.env.DASHSCOPE_API_KEY = "dashscope-secret";
+    process.env.REALTIME_PROXY_PORT = "3999";
+
+    const session = await aliyunQwenOmniProvider.createSession({
+      scenarioId: "interview",
+      level: "advanced",
+      correctionMode: "post_session",
+      voice: "coral",
+    });
+
+    expect(session).toMatchObject({
+      provider: "aliyun-qwen-omni",
+      demo: false,
+      clientSecret: "server-proxied",
+      transport: "websocket",
+      wsUrl: "ws://localhost:3999/aliyun/realtime",
+    });
+    expect(JSON.stringify(session)).not.toContain("dashscope-secret");
   });
 });
