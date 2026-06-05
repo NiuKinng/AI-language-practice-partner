@@ -6,7 +6,7 @@ export const scenarios: Scenario[] = [
     title: "面试",
     titleEn: "Job Interview",
     role: "AI 扮演一位专业但友好的招聘经理，围绕候选人的经历、动机和岗位匹配度追问。",
-    goal: "清楚介绍背景，回答行为面试问题，并用自然英语表达优势与职业目标。",
+    goal: "清晰介绍背景，回答行为面试问题，并用自然英语表达优势与职业目标。",
     difficulty: "intermediate",
     durationMinutes: 8,
     keyExpressions: [

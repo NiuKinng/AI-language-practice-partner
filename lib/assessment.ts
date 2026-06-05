@@ -33,8 +33,7 @@ export function buildFallbackAssessment(input: {
   const corrections: CorrectionItem[] = userTurns.slice(0, 2).map((turn) => ({
     original: turn.text,
     improved: turn.text,
-    reason:
-      "Add the assessment model key to receive precise grammar and expression rewrites for this sentence.",
+    reason: "当前使用本地兜底报告。配置评测模型密钥后，可以获得更精确的语法和表达改写原因。",
   }));
 
   return {
@@ -43,21 +42,21 @@ export function buildFallbackAssessment(input: {
     createdAt: new Date().toISOString(),
     scores,
     summary:
-      "This local fallback report estimates performance from turn count and answer length. Configure OPENAI_API_KEY for detailed pronunciation, grammar, and expression feedback.",
+      "这是本地兜底报告，会根据回答轮次和回答长度估算表现。配置 OPENAI_API_KEY 后，可以获得更细致的发音、语法和表达反馈。",
     pronunciationNotes: [
-      "Replay your longest answer and check whether each content word is clear.",
-      "Practice shorter thought groups to reduce hesitation.",
+      "回放你最长的一段回答，检查每个关键词是否清晰可懂。",
+      "练习把长句拆成更短的意群，减少停顿和犹豫。",
     ],
     grammarNotes: [
-      "Use complete sentences when explaining reasons, examples, or preferences.",
+      "解释原因、举例或表达偏好时，尽量使用完整句子。",
     ],
     expressionSuggestions: [
       "Add signposting phrases such as 'The main point is...' or 'For example...'.",
     ],
     corrections,
     nextPracticeGoals: [
-      "Answer one question with a clear beginning, detail, and closing sentence.",
-      "Record one response again and reduce long pauses.",
+      "用清晰的开头、细节和收尾回答一个问题。",
+      "重新录制一段回答，并有意识地减少长停顿。",
     ],
   };
 }

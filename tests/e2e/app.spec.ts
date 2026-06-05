@@ -33,7 +33,7 @@ test("scenario practice flow reaches report summary", async ({ page }) => {
           taskCompletion: 86,
         },
         summary: "你能完成核心回答，下一步可以让例子更具体。",
-        pronunciationNotes: ["Reduce long pauses between thought groups."],
+        pronunciationNotes: ["减少意群之间的长停顿。"],
         pronunciationDetails: {
           provider: "tencent-soe",
           voiceId: "voice-e2e",
@@ -43,7 +43,7 @@ test("scenario practice flow reaches report summary", async ({ page }) => {
           suggestedScore: 79,
           words: [{ word: "practicing", accuracy: 61 }],
         },
-        grammarNotes: ["Keep verb tense consistent."],
+        grammarNotes: ["保持动词时态一致。"],
         expressionSuggestions: ["One example that comes to mind is..."],
         corrections: [
           {
@@ -52,7 +52,7 @@ test("scenario practice flow reaches report summary", async ({ page }) => {
             reason: "want 后面通常接 to do。",
           },
         ],
-        nextPracticeGoals: ["Use one STAR answer in the next interview practice."],
+        nextPracticeGoals: ["下次面试练习中使用一次 STAR 回答。"],
       }),
     });
   });

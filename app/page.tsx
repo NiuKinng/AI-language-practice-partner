@@ -15,7 +15,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { buildFallbackAssessment } from "@/lib/assessment";
 import { clearPracticeSessions, listPracticeSessions } from "@/lib/db";
 import { scenarios } from "@/lib/scenarios";
 import { usePracticeStore } from "@/lib/store";
@@ -115,15 +114,6 @@ export default function Home() {
     () => scenarios.find((scenario) => scenario.id === practice.scenarioId) ?? scenarios[0],
     [practice.scenarioId],
   );
-  const currentReport =
-    practice.report ??
-    (practice.status === "report_ready" && practice.session
-      ? buildFallbackAssessment({
-          sessionId: practice.session.id,
-          scenarioId: practice.session.scenarioId,
-          transcript: practice.transcript,
-        })
-      : undefined);
 
   useEffect(() => {
     listPracticeSessions().then(setHistory).catch(() => setHistory([]));
@@ -150,7 +140,7 @@ export default function Home() {
             英语口语场景训练
           </h1>
           <p className="mt-2 max-w-2xl text-base leading-7 text-muted-foreground">
-            选择场景后直接开口练习。对话中少打断，结束后集中给发音、语法、表达和下一步目标。
+            选择场景后直接开口练习。对话中少打断，结束后集中给出发音、语法、表达和下一步目标。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -288,7 +278,7 @@ export default function Home() {
                 <div className="mt-4 space-y-3">
                   {practice.transcript.length === 0 ? (
                     <p className="text-sm leading-6 text-muted-foreground">
-                      开始练习后，这里会显示 AI 与你的语音转写。没有配置 API Key 时可以使用演示回答体验报告流程。
+                      开始练习后，这里会显示 AI 与你的语音转写。没有配置 API Key 时，可以使用演示回答体验报告流程。
                     </p>
                   ) : (
                     practice.transcript.map((turn) => (
@@ -348,7 +338,7 @@ export default function Home() {
                 </div>
               </div>
             </section>
-          ) : currentReport ? null : null}
+          ) : null}
         </div>
 
         <aside className="space-y-6">

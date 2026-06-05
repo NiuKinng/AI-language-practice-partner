@@ -35,5 +35,9 @@ describe("assessment helpers", () => {
     expect(report.scores).toHaveProperty("fluency");
     expect(report.scores).toHaveProperty("taskCompletion");
     expect(report.nextPracticeGoals.length).toBeGreaterThan(0);
+    expect(report.summary).toContain("本地兜底报告");
+    expect(report.pronunciationNotes.join("\n")).toContain("回放");
+    expect(report.grammarNotes.join("\n")).toContain("完整句子");
+    expect(report.corrections[0]?.reason).toContain("本地兜底报告");
   });
 });
