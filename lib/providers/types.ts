@@ -6,6 +6,7 @@ import type {
   TranscriptTurn,
   TurnTiming,
   VoiceName,
+  PronunciationDetails,
 } from "@/lib/types";
 
 export type VoiceProviderId = "openai-realtime" | "aliyun-qwen-omni";
@@ -42,6 +43,7 @@ export interface AssessmentInput {
   transcript: TranscriptTurn[];
   turnTimings: TurnTiming[];
   userLanguageLevel: Level;
+  pronunciationDetails?: PronunciationDetails;
 }
 
 export interface AssessmentProvider {

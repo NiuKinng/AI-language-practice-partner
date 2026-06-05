@@ -5,6 +5,7 @@ import {
   getVoiceProviderId,
 } from "@/lib/providers/config";
 import { aliyunQwenOmniProvider } from "@/lib/providers/aliyun-qwen-omni";
+import { openAiAssessmentProvider } from "@/lib/providers/assessment";
 import { openAiRealtimeProvider } from "@/lib/providers/openai-realtime";
 
 const originalEnv = { ...process.env };
@@ -105,5 +106,40 @@ describe("aliyunQwenOmniProvider", () => {
       wsUrl: "ws://localhost:3999/aliyun/realtime",
     });
     expect(JSON.stringify(session)).not.toContain("dashscope-secret");
+  });
+});
+
+describe("openAiAssessmentProvider pronunciation fusion", () => {
+  it("uses Tencent SOE pronunciation details in fallback reports", async () => {
+    delete process.env.OPENAI_API_KEY;
+
+    const report = await openAiAssessmentProvider.createReport({
+      sessionId: "session-1",
+      scenarioId: "interview",
+      transcript: [
+        {
+          id: "turn-1",
+          speaker: "user",
+          text: "I want to practice English speaking.",
+          startedAt: 0,
+          endedAt: 1000,
+        },
+      ],
+      turnTimings: [],
+      userLanguageLevel: "intermediate",
+      pronunciationDetails: {
+        provider: "tencent-soe",
+        voiceId: "voice-1",
+        accuracy: 76,
+        fluency: 81,
+        completion: 92,
+        suggestedScore: 79,
+        words: [{ word: "practice", accuracy: 62 }],
+      },
+    });
+
+    expect(report.scores.pronunciation).toBe(79);
+    expect(report.pronunciationDetails?.provider).toBe("tencent-soe");
+    expect(report.pronunciationNotes.join("\n")).toContain("practice");
   });
 });

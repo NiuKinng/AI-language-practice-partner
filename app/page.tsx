@@ -71,6 +71,41 @@ function ScorePanel({ scores }: { scores: ScoreSet }) {
   );
 }
 
+function PronunciationDetailsPanel({
+  details,
+}: {
+  details: NonNullable<PracticeSessionRecord["report"]>["pronunciationDetails"];
+}) {
+  if (!details) return null;
+
+  const weakWords = details.words
+    ?.filter((word) => typeof word.accuracy === "number" && word.accuracy < 70)
+    .slice(0, 6);
+
+  return (
+    <div className="mt-5 rounded-md border bg-secondary p-4">
+      <h3 className="font-bold">发音细项</h3>
+      <div className="mt-3 grid gap-3 md:grid-cols-3">
+        <ScoreRow label="准确度" value={Math.round(details.accuracy ?? 0)} />
+        <ScoreRow label="流利度" value={Math.round(details.fluency ?? 0)} />
+        <ScoreRow label="完整度" value={Math.round(details.completion ?? 0)} />
+      </div>
+      {weakWords && weakWords.length > 0 ? (
+        <div className="mt-4">
+          <p className="text-sm font-semibold">重点跟读词</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {weakWords.map((word) => (
+              <Badge key={`${word.word}-${word.startMs ?? ""}`}>
+                {word.word} {word.accuracy ? `${Math.round(word.accuracy)}分` : ""}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function Home() {
   const [history, setHistory] = useState<PracticeSessionRecord[]>([]);
   const [voice, setVoice] = useState<VoiceName>("coral");
@@ -289,6 +324,7 @@ export default function Home() {
               <div className="mt-5">
                 <ScorePanel scores={practice.report.scores} />
               </div>
+              <PronunciationDetailsPanel details={practice.report.pronunciationDetails} />
               <div className="mt-6 grid gap-4 md:grid-cols-2">
                 <div>
                   <h3 className="font-bold">纠错与替代表达</h3>

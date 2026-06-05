@@ -34,6 +34,15 @@ test("scenario practice flow reaches report summary", async ({ page }) => {
         },
         summary: "你能完成核心回答，下一步可以让例子更具体。",
         pronunciationNotes: ["Reduce long pauses between thought groups."],
+        pronunciationDetails: {
+          provider: "tencent-soe",
+          voiceId: "voice-e2e",
+          accuracy: 78,
+          fluency: 80,
+          completion: 88,
+          suggestedScore: 79,
+          words: [{ word: "practicing", accuracy: 61 }],
+        },
         grammarNotes: ["Keep verb tense consistent."],
         expressionSuggestions: ["One example that comes to mind is..."],
         corrections: [
@@ -57,4 +66,6 @@ test("scenario practice flow reaches report summary", async ({ page }) => {
   await page.getByRole("button", { name: "结束并总结" }).click();
   await expect(page.getByRole("heading", { name: "课后总结" })).toBeVisible();
   await expect(page.getByText("总分")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "发音细项" })).toBeVisible();
+  await expect(page.getByText("practicing 61分")).toBeVisible();
 });
