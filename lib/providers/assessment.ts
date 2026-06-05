@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { buildFallbackAssessment, normalizeScoreSet } from "@/lib/assessment";
 import { getScenario } from "@/lib/scenarios";
 import type { AssessmentProvider } from "@/lib/providers/types";
+import type { AssessmentReport } from "@/lib/types";
 
 const reportShape = {
   scores: {
@@ -37,11 +38,14 @@ export const openAiAssessmentProvider: AssessmentProvider = {
   id: "openai-assessment",
   async createReport(input) {
     if (!process.env.OPENAI_API_KEY) {
-      return buildFallbackAssessment({
-        sessionId: input.sessionId,
-        scenarioId: input.scenarioId,
-        transcript: input.transcript,
-      });
+      return mergePronunciationDetails(
+        buildFallbackAssessment({
+          sessionId: input.sessionId,
+          scenarioId: input.scenarioId,
+          transcript: input.transcript,
+        }),
+        input.pronunciationDetails,
+      );
     }
 
     const scenario = getScenario(input.scenarioId);
@@ -64,6 +68,7 @@ export const openAiAssessmentProvider: AssessmentProvider = {
             userLanguageLevel: input.userLanguageLevel,
             turnTimings: input.turnTimings,
             transcript: compactTranscript(input.transcript),
+            externalPronunciationDetails: input.pronunciationDetails,
           }),
         },
       ],
@@ -72,12 +77,48 @@ export const openAiAssessmentProvider: AssessmentProvider = {
     const content = completion.choices[0]?.message.content ?? "{}";
     const parsed = JSON.parse(content);
 
-    return {
-      sessionId: input.sessionId,
-      scenarioId: input.scenarioId,
-      createdAt: new Date().toISOString(),
-      ...parsed,
-      scores: normalizeScoreSet(parsed.scores),
-    };
+    return mergePronunciationDetails(
+      {
+        sessionId: input.sessionId,
+        scenarioId: input.scenarioId,
+        createdAt: new Date().toISOString(),
+        ...parsed,
+        scores: normalizeScoreSet(parsed.scores),
+      },
+      input.pronunciationDetails,
+    );
   },
 };
+
+function mergePronunciationDetails(
+  report: AssessmentReport,
+  pronunciationDetails: AssessmentReport["pronunciationDetails"],
+): AssessmentReport {
+  if (!pronunciationDetails) return report;
+
+  const pronunciationScore =
+    pronunciationDetails.suggestedScore ??
+    pronunciationDetails.accuracy ??
+    report.scores.pronunciation;
+  const weakWords =
+    pronunciationDetails.words
+      ?.filter((word) => typeof word.accuracy === "number" && word.accuracy < 70)
+      .slice(0, 5)
+      .map((word) => word.word) ?? [];
+
+  return {
+    ...report,
+    pronunciationDetails,
+    scores: {
+      ...report.scores,
+      pronunciation: normalizeScoreSet({ pronunciation: pronunciationScore }).pronunciation,
+    },
+    pronunciationNotes: [
+      ...report.pronunciationNotes,
+      `腾讯 SOE 发音评分已纳入报告：准确度 ${pronunciationDetails.accuracy ?? "-"}，流利度 ${pronunciationDetails.fluency ?? "-"}，完整度 ${pronunciationDetails.completion ?? "-"}。`,
+      weakWords.length > 0
+        ? `建议重点跟读这些词：${weakWords.join(", ")}。`
+        : "本次未识别到明显低分词，可继续保持完整句跟读练习。",
+    ],
+  };
+}

@@ -27,6 +27,37 @@ const requestSchema = z.object({
     )
     .default([]),
   userLanguageLevel: z.enum(["beginner", "intermediate", "advanced"]).default("intermediate"),
+  pronunciationDetails: z
+    .object({
+      provider: z.enum(["demo", "tencent-soe"]),
+      voiceId: z.string().optional(),
+      accuracy: z.number().optional(),
+      fluency: z.number().optional(),
+      completion: z.number().optional(),
+      suggestedScore: z.number().optional(),
+      words: z
+        .array(
+          z.object({
+            word: z.string(),
+            referenceWord: z.string().optional(),
+            accuracy: z.number().optional(),
+            fluency: z.number().optional(),
+            startMs: z.number().optional(),
+            endMs: z.number().optional(),
+            phones: z
+              .array(
+                z.object({
+                  phone: z.string(),
+                  accuracy: z.number().optional(),
+                }),
+              )
+              .optional(),
+          }),
+        )
+        .optional(),
+      raw: z.unknown().optional(),
+    })
+    .optional(),
 });
 
 const reportSchema = z.object({
