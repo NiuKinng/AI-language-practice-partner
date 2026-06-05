@@ -62,7 +62,7 @@ test("scenario practice flow reaches report summary", async ({ page }) => {
   await page.getByRole("button", { name: /点餐/ }).click();
   await page.getByRole("button", { name: "开始练习" }).click();
   await expect(page.getByText("现在可以说话")).toBeVisible();
-  await expect(page.getByText("请直接开口，说完后等待 AI 回应。")).toBeVisible();
+  await expect(page.getByText("请直接开口；可以停顿思考，静音约 3 秒后 AI 回复。")).toBeVisible();
   await page.getByRole("button", { name: "添加演示回答" }).click();
   await page.getByRole("button", { name: "结束并总结" }).click();
   await expect(page.getByRole("heading", { name: "课后总结" })).toBeVisible();
