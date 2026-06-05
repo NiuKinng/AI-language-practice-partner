@@ -6,6 +6,10 @@ import {
 } from "@/lib/providers/config";
 import { aliyunQwenOmniProvider } from "@/lib/providers/aliyun-qwen-omni";
 import { openAiAssessmentProvider } from "@/lib/providers/assessment";
+import {
+  deepSeekAssessmentProvider,
+  getDeepSeekAssessmentConfig,
+} from "@/lib/providers/deepseek-assessment";
 import { openAiRealtimeProvider } from "@/lib/providers/openai-realtime";
 
 const originalEnv = { ...process.env };
@@ -27,9 +31,11 @@ describe("provider config", () => {
 
   it("accepts planned domestic provider ids without changing current behavior", () => {
     process.env.VOICE_PROVIDER = "aliyun-qwen-omni";
+    process.env.ASSESSMENT_PROVIDER = "deepseek-assessment";
     process.env.PRONUNCIATION_PROVIDER = "tencent-soe";
 
     expect(getVoiceProviderId()).toBe("aliyun-qwen-omni");
+    expect(getAssessmentProviderId()).toBe("deepseek-assessment");
     expect(getPronunciationProviderId()).toBe("tencent-soe");
   });
 
@@ -142,6 +148,83 @@ describe("openAiAssessmentProvider pronunciation fusion", () => {
     expect(report.pronunciationDetails?.provider).toBe("tencent-soe");
     expect(report.pronunciationNotes.join("\n")).toContain("腾讯 SOE 发音评分已纳入报告");
     expect(report.pronunciationNotes.join("\n")).toContain("建议重点跟读这些词");
+    expect(report.pronunciationNotes.join("\n")).toContain("practice");
+  });
+});
+
+describe("deepSeekAssessmentProvider", () => {
+  it("uses DeepSeek defaults and environment overrides", () => {
+    delete process.env.DEEPSEEK_BASE_URL;
+    delete process.env.DEEPSEEK_ASSESSMENT_MODEL;
+
+    expect(getDeepSeekAssessmentConfig()).toEqual({
+      baseURL: "https://api.deepseek.com",
+      model: "deepseek-chat",
+    });
+
+    process.env.DEEPSEEK_BASE_URL = "https://example.deepseek.local";
+    process.env.DEEPSEEK_ASSESSMENT_MODEL = "deepseek-custom";
+
+    expect(getDeepSeekAssessmentConfig()).toEqual({
+      baseURL: "https://example.deepseek.local",
+      model: "deepseek-custom",
+    });
+  });
+
+  it("returns a fallback report when DEEPSEEK_API_KEY is missing", async () => {
+    delete process.env.DEEPSEEK_API_KEY;
+
+    const report = await deepSeekAssessmentProvider.createReport({
+      sessionId: "session-1",
+      scenarioId: "meeting",
+      transcript: [
+        {
+          id: "turn-1",
+          speaker: "user",
+          text: "I need more time to explain the blocker.",
+          startedAt: 0,
+          endedAt: 1000,
+        },
+      ],
+      turnTimings: [],
+      userLanguageLevel: "advanced",
+    });
+
+    expect(report.sessionId).toBe("session-1");
+    expect(report.scores).toHaveProperty("grammar");
+    expect(report.nextPracticeGoals.length).toBeGreaterThan(0);
+  });
+
+  it("uses Tencent SOE pronunciation details in fallback reports", async () => {
+    delete process.env.DEEPSEEK_API_KEY;
+
+    const report = await deepSeekAssessmentProvider.createReport({
+      sessionId: "session-1",
+      scenarioId: "interview",
+      transcript: [
+        {
+          id: "turn-1",
+          speaker: "user",
+          text: "I want to practice English speaking.",
+          startedAt: 0,
+          endedAt: 1000,
+        },
+      ],
+      turnTimings: [],
+      userLanguageLevel: "intermediate",
+      pronunciationDetails: {
+        provider: "tencent-soe",
+        voiceId: "voice-1",
+        accuracy: 76,
+        fluency: 81,
+        completion: 92,
+        suggestedScore: 79,
+        words: [{ word: "practice", accuracy: 62 }],
+      },
+    });
+
+    expect(report.scores.pronunciation).toBe(79);
+    expect(report.pronunciationDetails?.provider).toBe("tencent-soe");
     expect(report.pronunciationNotes.join("\n")).toContain("practice");
   });
 });

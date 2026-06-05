@@ -4,7 +4,7 @@ import { getScenario } from "@/lib/scenarios";
 import type { AssessmentProvider } from "@/lib/providers/types";
 import type { AssessmentReport } from "@/lib/types";
 
-const reportShape = {
+export const assessmentReportShape = {
   scores: {
     overall: 0,
     pronunciation: 0,
@@ -28,7 +28,9 @@ const reportShape = {
   nextPracticeGoals: ["3 条中文下次练习目标"],
 };
 
-function compactTranscript(turns: Parameters<AssessmentProvider["createReport"]>[0]["transcript"]) {
+export function compactTranscript(
+  turns: Parameters<AssessmentProvider["createReport"]>[0]["transcript"],
+) {
   return turns
     .map((turn) => `${turn.speaker === "user" ? "Learner" : "Partner"}: ${turn.text}`)
     .join("\n");
@@ -63,7 +65,7 @@ export const openAiAssessmentProvider: AssessmentProvider = {
         {
           role: "user",
           content: JSON.stringify({
-            expectedShape: reportShape,
+            expectedShape: assessmentReportShape,
             scenario,
             userLanguageLevel: input.userLanguageLevel,
             turnTimings: input.turnTimings,
@@ -90,7 +92,7 @@ export const openAiAssessmentProvider: AssessmentProvider = {
   },
 };
 
-function mergePronunciationDetails(
+export function mergePronunciationDetails(
   report: AssessmentReport,
   pronunciationDetails: AssessmentReport["pronunciationDetails"],
 ): AssessmentReport {

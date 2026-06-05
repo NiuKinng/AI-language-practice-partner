@@ -1,5 +1,6 @@
 import { openAiAssessmentProvider } from "@/lib/providers/assessment";
 import { aliyunQwenOmniProvider } from "@/lib/providers/aliyun-qwen-omni";
+import { deepSeekAssessmentProvider } from "@/lib/providers/deepseek-assessment";
 import { getAssessmentProviderId, getVoiceProviderId } from "@/lib/providers/config";
 import { openAiRealtimeProvider } from "@/lib/providers/openai-realtime";
 import type { AssessmentProvider, VoiceProvider } from "@/lib/providers/types";
@@ -23,6 +24,10 @@ export function getAssessmentProvider(): AssessmentProvider {
 
   if (providerId === "openai-assessment") {
     return openAiAssessmentProvider;
+  }
+
+  if (providerId === "deepseek-assessment") {
+    return deepSeekAssessmentProvider;
   }
 
   throw new Error(`Assessment provider ${providerId} is not implemented yet.`);
