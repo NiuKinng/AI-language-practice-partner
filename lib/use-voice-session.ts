@@ -43,6 +43,7 @@ interface AliyunAudioOutputState {
   sources: Set<AudioBufferSourceNode>;
   isAssistantAudioPlaying: boolean;
   isAssistantResponseComplete: boolean;
+  isAssistantResponsePending: boolean;
 }
 
 export function useVoiceSession() {
@@ -342,6 +343,7 @@ async function startAliyunWebSocketSession(
     sources: new Set<AudioBufferSourceNode>(),
     isAssistantAudioPlaying: false,
     isAssistantResponseComplete: true,
+    isAssistantResponsePending: false,
   };
 
   refs.mediaStreamRef.current = stream;
@@ -352,7 +354,7 @@ async function startAliyunWebSocketSession(
   refs.webSocketRef.current = socket;
 
   socket.onopen = () => {
-    usePracticeStore.getState().setStatus("listening");
+    usePracticeStore.getState().setStatus("thinking");
     socket.send(
       JSON.stringify({
         type: "session.update",
@@ -367,6 +369,8 @@ async function startAliyunWebSocketSession(
         },
       }),
     );
+    outputState.isAssistantResponsePending = true;
+    outputState.isAssistantResponseComplete = false;
     socket.send(
       JSON.stringify({
         type: "response.create",
@@ -391,6 +395,7 @@ async function startAliyunWebSocketSession(
 
     if (type.includes("response.audio.delta") && audioDelta) {
       outputState.isAssistantAudioPlaying = true;
+      outputState.isAssistantResponsePending = false;
       outputState.isAssistantResponseComplete = false;
       usePracticeStore.getState().setStatus("speaking");
       await outputContext.resume().catch(() => undefined);
@@ -405,6 +410,7 @@ async function startAliyunWebSocketSession(
     }
 
     if (type === "response.done" || type === "response.audio.done") {
+      outputState.isAssistantResponsePending = false;
       outputState.isAssistantResponseComplete = true;
       if (outputState.isAssistantAudioPlaying) {
         finishAssistantPlaybackIfReady(outputContext, outputState, socket, true);
@@ -433,6 +439,7 @@ async function startAliyunWebSocketSession(
     if (
       !canSendUserAudio({
         isAssistantAudioPlaying: outputState.isAssistantAudioPlaying,
+        isAssistantResponsePending: outputState.isAssistantResponsePending,
         queuedSourceCount: outputState.sources.size,
       })
     ) {

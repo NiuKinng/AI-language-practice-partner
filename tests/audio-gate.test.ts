@@ -5,6 +5,14 @@ describe("audio gate", () => {
   it("blocks user audio while assistant audio is playing or queued", () => {
     expect(
       canSendUserAudio({
+        isAssistantAudioPlaying: false,
+        isAssistantResponsePending: true,
+        queuedSourceCount: 0,
+      }),
+    ).toBe(false);
+
+    expect(
+      canSendUserAudio({
         isAssistantAudioPlaying: true,
         queuedSourceCount: 0,
       }),

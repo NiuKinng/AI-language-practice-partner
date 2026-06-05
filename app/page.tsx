@@ -32,7 +32,7 @@ const statusText = {
   connecting: "连接中",
   listening: "现在可以说话",
   speaking: "AI 回应中，请听完后再说",
-  thinking: "整理中",
+  thinking: "等待 AI 开场",
   ending: "生成报告",
   report_ready: "报告已生成",
   error: "需要处理",
