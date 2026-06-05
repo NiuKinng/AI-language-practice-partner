@@ -30,8 +30,8 @@ const levelLabels = {
 const statusText = {
   idle: "准备开始",
   connecting: "连接中",
-  listening: "正在聆听",
-  speaking: "AI 回应中",
+  listening: "现在可以说话",
+  speaking: "AI 回应中，请听完后再说",
   thinking: "整理中",
   ending: "生成报告",
   report_ready: "报告已生成",
@@ -123,6 +123,8 @@ export default function Home() {
     practice.status === "connecting" ||
     practice.status === "listening" ||
     practice.status === "speaking";
+  const canSpeakNow = practice.status === "listening";
+  const assistantSpeaking = practice.status === "speaking";
 
   async function clearHistory() {
     await clearPracticeSessions();
@@ -242,16 +244,43 @@ export default function Home() {
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-[220px_1fr]">
-              <div className="rounded-md border bg-secondary p-4">
+              <div
+                aria-live="polite"
+                className={`rounded-md border p-4 transition-colors ${
+                  canSpeakNow
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+                    : assistantSpeaking
+                      ? "border-slate-200 bg-slate-50 text-slate-500"
+                      : "bg-secondary"
+                }`}
+              >
                 <p className="text-sm text-muted-foreground">状态</p>
                 <div className="mt-2 flex items-center gap-2 text-lg font-bold">
                   {practice.status === "error" ? (
                     <MicOff className="h-5 w-5 text-destructive" aria-hidden="true" />
+                  ) : canSpeakNow ? (
+                    <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
+                      <Mic className="relative h-5 w-5" aria-hidden="true" />
+                    </span>
+                  ) : assistantSpeaking ? (
+                    <MicOff className="h-5 w-5 text-slate-400" aria-hidden="true" />
                   ) : (
                     <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
                   )}
                   {statusText[practice.status]}
                 </div>
+                {canSpeakNow || assistantSpeaking ? (
+                  <p
+                    className={`mt-3 rounded-md px-3 py-2 text-sm font-semibold ${
+                      canSpeakNow
+                        ? "bg-emerald-100 text-emerald-900"
+                        : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {canSpeakNow ? "请直接开口，说完后等待 AI 回应。" : "当前不会收录你的声音。"}
+                  </p>
+                ) : null}
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">
                   开场句：{selectedScenario.openingLine}
                 </p>

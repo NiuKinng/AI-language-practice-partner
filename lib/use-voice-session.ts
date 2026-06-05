@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+import { canSendUserAudio } from "@/lib/audio-gate";
 import { getScenario } from "@/lib/scenarios";
 import { usePracticeStore } from "@/lib/store";
 import type { AssessmentReport, TranscriptTurn, VoiceName } from "@/lib/types";
@@ -35,6 +36,13 @@ function readTextFromEvent(event: Record<string, unknown>) {
 function eventSpeaker(type: string) {
   if (type.includes("input_audio") || type.includes("user")) return "user" as const;
   return "assistant" as const;
+}
+
+interface AliyunAudioOutputState {
+  nextTime: number;
+  sources: Set<AudioBufferSourceNode>;
+  isAssistantAudioPlaying: boolean;
+  isAssistantResponseComplete: boolean;
 }
 
 export function useVoiceSession() {
@@ -215,7 +223,7 @@ export function useVoiceSession() {
             ? "麦克风权限被拒绝。请允许浏览器使用麦克风后重试。"
             : error instanceof Error
               ? error.message
-              : "Realtime connection failed.";
+              : "实时语音连接失败。";
         usePracticeStore.getState().setError(message);
       }
     },
@@ -317,13 +325,24 @@ async function startAliyunWebSocketSession(
   wsUrl.searchParams.set("model", realtime.model);
   wsUrl.searchParams.set("sessionId", realtime.sessionId);
 
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+  });
   const inputContext = new AudioContext();
   const outputContext = new AudioContext();
   const source = inputContext.createMediaStreamSource(stream);
   const processor = inputContext.createScriptProcessor(4096, 1, 1);
   const socket = new WebSocket(wsUrl.toString());
-  const outputState = { nextTime: 0 };
+  const outputState: AliyunAudioOutputState = {
+    nextTime: 0,
+    sources: new Set<AudioBufferSourceNode>(),
+    isAssistantAudioPlaying: false,
+    isAssistantResponseComplete: true,
+  };
 
   refs.mediaStreamRef.current = stream;
   refs.inputAudioContextRef.current = inputContext;
@@ -371,8 +390,13 @@ async function startAliyunWebSocketSession(
           : undefined;
 
     if (type.includes("response.audio.delta") && audioDelta) {
-      playPcm16Base64(outputContext, outputState, audioDelta, 24000);
+      outputState.isAssistantAudioPlaying = true;
+      outputState.isAssistantResponseComplete = false;
       usePracticeStore.getState().setStatus("speaking");
+      await outputContext.resume().catch(() => undefined);
+      playPcm16Base64(outputContext, outputState, audioDelta, 24000, () => {
+        finishAssistantPlaybackIfReady(outputContext, outputState, socket, true);
+      });
     }
 
     const text = readTextFromEvent(event);
@@ -381,7 +405,12 @@ async function startAliyunWebSocketSession(
     }
 
     if (type === "response.done" || type === "response.audio.done") {
-      usePracticeStore.getState().setStatus("listening");
+      outputState.isAssistantResponseComplete = true;
+      if (outputState.isAssistantAudioPlaying) {
+        finishAssistantPlaybackIfReady(outputContext, outputState, socket, true);
+      } else {
+        usePracticeStore.getState().setStatus("listening");
+      }
     }
 
     if (type === "error") {
@@ -401,6 +430,14 @@ async function startAliyunWebSocketSession(
 
   processor.onaudioprocess = (event) => {
     if (socket.readyState !== WebSocket.OPEN) return;
+    if (
+      !canSendUserAudio({
+        isAssistantAudioPlaying: outputState.isAssistantAudioPlaying,
+        queuedSourceCount: outputState.sources.size,
+      })
+    ) {
+      return;
+    }
 
     const input = event.inputBuffer.getChannelData(0);
     const pcm16 = floatTo16BitPcm(downsample(input, inputContext.sampleRate, 16000));
@@ -459,11 +496,33 @@ function base64ToInt16Array(base64: string) {
   return new Int16Array(bytes.buffer);
 }
 
+function finishAssistantPlaybackIfReady(
+  context: AudioContext,
+  outputState: AliyunAudioOutputState,
+  socket: WebSocket,
+  playChime: boolean,
+) {
+  if (!outputState.isAssistantResponseComplete || outputState.sources.size > 0) return;
+
+  outputState.isAssistantAudioPlaying = false;
+  outputState.nextTime = context.currentTime;
+
+  if (socket.readyState !== WebSocket.OPEN || usePracticeStore.getState().status !== "speaking") {
+    return;
+  }
+
+  usePracticeStore.getState().setStatus("listening");
+  if (playChime) {
+    playReadyChime(context);
+  }
+}
+
 function playPcm16Base64(
   context: AudioContext,
-  outputState: { nextTime: number },
+  outputState: AliyunAudioOutputState,
   base64: string,
   sampleRate: number,
+  onQueueDrained: () => void,
 ) {
   const pcm = base64ToInt16Array(base64);
   const buffer = context.createBuffer(1, pcm.length, sampleRate);
@@ -476,8 +535,32 @@ function playPcm16Base64(
   const source = context.createBufferSource();
   source.buffer = buffer;
   source.connect(context.destination);
+  source.onended = () => {
+    outputState.sources.delete(source);
+    if (outputState.sources.size === 0) {
+      onQueueDrained();
+    }
+  };
 
   const startAt = Math.max(context.currentTime, outputState.nextTime);
+  outputState.sources.add(source);
   source.start(startAt);
   outputState.nextTime = startAt + buffer.duration;
+}
+
+function playReadyChime(context: AudioContext) {
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  const now = context.currentTime;
+
+  oscillator.frequency.setValueAtTime(660, now);
+  oscillator.type = "sine";
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.04, now + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.18);
 }
