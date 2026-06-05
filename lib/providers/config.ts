@@ -5,7 +5,10 @@ import type {
 } from "@/lib/providers/types";
 
 const voiceProviders: VoiceProviderId[] = ["openai-realtime", "aliyun-qwen-omni"];
-const assessmentProviders: AssessmentProviderId[] = ["openai-assessment"];
+const assessmentProviders: AssessmentProviderId[] = [
+  "openai-assessment",
+  "deepseek-assessment",
+];
 const pronunciationProviders: PronunciationProviderId[] = ["demo", "tencent-soe"];
 
 function pickProvider<T extends string>(

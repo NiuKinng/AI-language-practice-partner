@@ -10,7 +10,7 @@ import type {
 } from "@/lib/types";
 
 export type VoiceProviderId = "openai-realtime" | "aliyun-qwen-omni";
-export type AssessmentProviderId = "openai-assessment";
+export type AssessmentProviderId = "openai-assessment" | "deepseek-assessment";
 export type PronunciationProviderId = "demo" | "tencent-soe";
 
 export interface RealtimeSessionInput {
