@@ -1,4 +1,5 @@
 import { openAiAssessmentProvider } from "@/lib/providers/assessment";
+import { aliyunQwenOmniProvider } from "@/lib/providers/aliyun-qwen-omni";
 import { getAssessmentProviderId, getVoiceProviderId } from "@/lib/providers/config";
 import { openAiRealtimeProvider } from "@/lib/providers/openai-realtime";
 import type { AssessmentProvider, VoiceProvider } from "@/lib/providers/types";
@@ -8,6 +9,10 @@ export function getVoiceProvider(): VoiceProvider {
 
   if (providerId === "openai-realtime") {
     return openAiRealtimeProvider;
+  }
+
+  if (providerId === "aliyun-qwen-omni") {
+    return aliyunQwenOmniProvider;
   }
 
   throw new Error(`Voice provider ${providerId} is not implemented yet.`);

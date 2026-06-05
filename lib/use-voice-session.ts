@@ -6,11 +6,13 @@ import { usePracticeStore } from "@/lib/store";
 import type { AssessmentReport, TranscriptTurn, VoiceName } from "@/lib/types";
 
 interface RealtimeSessionResponse {
+  provider?: "openai-realtime" | "aliyun-qwen-omni";
   demo: boolean;
   clientSecret: string;
   sessionId: string;
   expiresAt: string;
   model: string;
+  instructions?: string;
   error?: string;
 }
 
@@ -120,14 +122,18 @@ export function useVoiceSession() {
           }
         };
 
-        const dataChannel = peer.createDataChannel("oai-events");
+        const dataChannel = peer.createDataChannel(
+          realtime.provider === "aliyun-qwen-omni" ? "aliyun-events" : "oai-events",
+        );
         dataChannelRef.current = dataChannel;
         dataChannel.onopen = () => {
           dataChannel.send(
             JSON.stringify({
               type: "response.create",
               response: {
-                instructions: `Start the ${scenario.titleEn} roleplay now with this opening line: ${scenario.openingLine}`,
+                instructions:
+                  realtime.instructions ??
+                  `Start the ${scenario.titleEn} roleplay now with this opening line: ${scenario.openingLine}`,
               },
             }),
           );
@@ -161,34 +167,14 @@ export function useVoiceSession() {
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
 
-        const endpoints = [
-          `https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(realtime.model)}`,
-          `https://api.openai.com/v1/realtime?model=${encodeURIComponent(realtime.model)}`,
-        ];
-        let answerSdp = "";
-        let lastError = "";
-
-        for (const endpoint of endpoints) {
-          const sdpResponse = await fetch(endpoint, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${realtime.clientSecret}`,
-              "Content-Type": "application/sdp",
-            },
-            body: offer.sdp,
-          });
-
-          if (sdpResponse.ok) {
-            answerSdp = await sdpResponse.text();
-            break;
-          }
-
-          lastError = await sdpResponse.text();
-        }
-
-        if (!answerSdp) {
-          throw new Error(lastError || "Realtime WebRTC answer failed.");
-        }
+        const answerSdp =
+          realtime.provider === "aliyun-qwen-omni"
+            ? await exchangeAliyunOffer(offer.sdp ?? "", realtime.model)
+            : await exchangeOpenAiOffer(
+                offer.sdp ?? "",
+                realtime.model,
+                realtime.clientSecret,
+              );
 
         await peer.setRemoteDescription({ type: "answer", sdp: answerSdp });
       } catch (error) {
@@ -250,4 +236,46 @@ export function useVoiceSession() {
     cleanup,
     addDemoUserTurn,
   };
+}
+
+async function exchangeAliyunOffer(sdp: string, model: string) {
+  const response = await fetch("/api/realtime/aliyun/offer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sdp, model }),
+  });
+  const payload = (await response.json()) as { answer?: string; error?: string };
+
+  if (!response.ok || !payload.answer) {
+    throw new Error(payload.error ?? "Aliyun realtime WebRTC answer failed.");
+  }
+
+  return payload.answer;
+}
+
+async function exchangeOpenAiOffer(sdp: string, model: string, clientSecret: string) {
+  const endpoints = [
+    `https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(model)}`,
+    `https://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`,
+  ];
+  let lastError = "";
+
+  for (const endpoint of endpoints) {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${clientSecret}`,
+        "Content-Type": "application/sdp",
+      },
+      body: sdp,
+    });
+
+    if (response.ok) {
+      return response.text();
+    }
+
+    lastError = await response.text();
+  }
+
+  throw new Error(lastError || "Realtime WebRTC answer failed.");
 }

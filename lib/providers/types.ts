@@ -26,6 +26,7 @@ export interface RealtimeSessionResult {
   sessionId: string;
   expiresAt: string;
   model: string;
+  instructions?: string;
 }
 
 export interface VoiceProvider {
