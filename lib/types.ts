@@ -69,10 +69,37 @@ export interface AssessmentReport {
   scores: ScoreSet;
   summary: string;
   pronunciationNotes: string[];
+  pronunciationDetails?: PronunciationDetails;
   grammarNotes: string[];
   expressionSuggestions: string[];
   corrections: CorrectionItem[];
   nextPracticeGoals: string[];
+}
+
+export interface PronunciationDetails {
+  provider: "demo" | "tencent-soe";
+  voiceId?: string;
+  accuracy?: number;
+  fluency?: number;
+  completion?: number;
+  suggestedScore?: number;
+  words?: PronunciationWord[];
+  raw?: unknown;
+}
+
+export interface PronunciationWord {
+  word: string;
+  referenceWord?: string;
+  accuracy?: number;
+  fluency?: number;
+  startMs?: number;
+  endMs?: number;
+  phones?: PronunciationPhone[];
+}
+
+export interface PronunciationPhone {
+  phone: string;
+  accuracy?: number;
 }
 
 export interface PracticeSessionRecord {
