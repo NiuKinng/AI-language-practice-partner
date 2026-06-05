@@ -27,6 +27,8 @@ export interface RealtimeSessionResult {
   expiresAt: string;
   model: string;
   instructions?: string;
+  transport?: "webrtc" | "websocket";
+  wsUrl?: string;
 }
 
 export interface VoiceProvider {

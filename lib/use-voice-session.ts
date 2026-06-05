@@ -13,6 +13,8 @@ interface RealtimeSessionResponse {
   expiresAt: string;
   model: string;
   instructions?: string;
+  transport?: "webrtc" | "websocket";
+  wsUrl?: string;
   error?: string;
 }
 
@@ -40,16 +42,33 @@ export function useVoiceSession() {
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const webSocketRef = useRef<WebSocket | null>(null);
+  const inputAudioContextRef = useRef<AudioContext | null>(null);
+  const outputAudioContextRef = useRef<AudioContext | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const outputTimeRef = useRef(0);
   const transcriptBufferRef = useRef(new Map<string, string>());
   const store = usePracticeStore();
 
   const cleanup = useCallback(() => {
     dataChannelRef.current?.close();
+    webSocketRef.current?.close();
+    processorRef.current?.disconnect();
+    sourceRef.current?.disconnect();
+    inputAudioContextRef.current?.close();
+    outputAudioContextRef.current?.close();
     peerRef.current?.close();
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     dataChannelRef.current = null;
+    webSocketRef.current = null;
+    processorRef.current = null;
+    sourceRef.current = null;
+    inputAudioContextRef.current = null;
+    outputAudioContextRef.current = null;
     peerRef.current = null;
     mediaStreamRef.current = null;
+    outputTimeRef.current = 0;
   }, []);
 
   const addTranscriptTurn = useCallback(
@@ -97,6 +116,23 @@ export function useVoiceSession() {
           return;
         }
 
+        if (realtime.provider === "aliyun-qwen-omni") {
+          await startAliyunWebSocketSession(
+            realtime,
+            scenario.openingLine,
+            addTranscriptTurn,
+            {
+              mediaStreamRef,
+              inputAudioContextRef,
+              outputAudioContextRef,
+              sourceRef,
+              processorRef,
+              webSocketRef,
+            },
+          );
+          return;
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaStreamRef.current = stream;
 
@@ -122,9 +158,7 @@ export function useVoiceSession() {
           }
         };
 
-        const dataChannel = peer.createDataChannel(
-          realtime.provider === "aliyun-qwen-omni" ? "aliyun-events" : "oai-events",
-        );
+        const dataChannel = peer.createDataChannel("oai-events");
         dataChannelRef.current = dataChannel;
         dataChannel.onopen = () => {
           dataChannel.send(
@@ -167,14 +201,11 @@ export function useVoiceSession() {
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
 
-        const answerSdp =
-          realtime.provider === "aliyun-qwen-omni"
-            ? await exchangeAliyunOffer(offer.sdp ?? "", realtime.model)
-            : await exchangeOpenAiOffer(
-                offer.sdp ?? "",
-                realtime.model,
-                realtime.clientSecret,
-              );
+        const answerSdp = await exchangeOpenAiOffer(
+          offer.sdp ?? "",
+          realtime.model,
+          realtime.clientSecret,
+        );
 
         await peer.setRemoteDescription({ type: "answer", sdp: answerSdp });
       } catch (error) {
@@ -238,21 +269,6 @@ export function useVoiceSession() {
   };
 }
 
-async function exchangeAliyunOffer(sdp: string, model: string) {
-  const response = await fetch("/api/realtime/aliyun/offer", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sdp, model }),
-  });
-  const payload = (await response.json()) as { answer?: string; error?: string };
-
-  if (!response.ok || !payload.answer) {
-    throw new Error(payload.error ?? "Aliyun realtime WebRTC answer failed.");
-  }
-
-  return payload.answer;
-}
-
 async function exchangeOpenAiOffer(sdp: string, model: string, clientSecret: string) {
   const endpoints = [
     `https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(model)}`,
@@ -278,4 +294,190 @@ async function exchangeOpenAiOffer(sdp: string, model: string, clientSecret: str
   }
 
   throw new Error(lastError || "Realtime WebRTC answer failed.");
+}
+
+async function startAliyunWebSocketSession(
+  realtime: RealtimeSessionResponse,
+  openingLine: string,
+  addTranscriptTurn: (speaker: "user" | "assistant", text: string, id?: string) => void,
+  refs: {
+    mediaStreamRef: { current: MediaStream | null };
+    inputAudioContextRef: { current: AudioContext | null };
+    outputAudioContextRef: { current: AudioContext | null };
+    sourceRef: { current: MediaStreamAudioSourceNode | null };
+    processorRef: { current: ScriptProcessorNode | null };
+    webSocketRef: { current: WebSocket | null };
+  },
+) {
+  if (!realtime.wsUrl) {
+    throw new Error("Aliyun realtime WebSocket URL is missing.");
+  }
+
+  const wsUrl = new URL(realtime.wsUrl);
+  wsUrl.searchParams.set("model", realtime.model);
+  wsUrl.searchParams.set("sessionId", realtime.sessionId);
+
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const inputContext = new AudioContext();
+  const outputContext = new AudioContext();
+  const source = inputContext.createMediaStreamSource(stream);
+  const processor = inputContext.createScriptProcessor(4096, 1, 1);
+  const socket = new WebSocket(wsUrl.toString());
+  const outputState = { nextTime: 0 };
+
+  refs.mediaStreamRef.current = stream;
+  refs.inputAudioContextRef.current = inputContext;
+  refs.outputAudioContextRef.current = outputContext;
+  refs.sourceRef.current = source;
+  refs.processorRef.current = processor;
+  refs.webSocketRef.current = socket;
+
+  socket.onopen = () => {
+    usePracticeStore.getState().setStatus("listening");
+    socket.send(
+      JSON.stringify({
+        type: "session.update",
+        session: {
+          instructions: realtime.instructions,
+          modalities: ["text", "audio"],
+          input_audio_format: "pcm16",
+          output_audio_format: "pcm16",
+          turn_detection: {
+            type: "server_vad",
+          },
+        },
+      }),
+    );
+    socket.send(
+      JSON.stringify({
+        type: "response.create",
+        response: {
+          instructions: `Start the roleplay with this opening line: ${openingLine}`,
+        },
+      }),
+    );
+  };
+
+  socket.onmessage = async (message) => {
+    if (typeof message.data !== "string") return;
+
+    const event = JSON.parse(message.data) as Record<string, unknown>;
+    const type = typeof event.type === "string" ? event.type : "";
+    const audioDelta =
+      typeof event.delta === "string"
+        ? event.delta
+        : typeof event.audio === "string"
+          ? event.audio
+          : undefined;
+
+    if (type.includes("response.audio.delta") && audioDelta) {
+      playPcm16Base64(outputContext, outputState, audioDelta, 24000);
+      usePracticeStore.getState().setStatus("speaking");
+    }
+
+    const text = readTextFromEvent(event);
+    if ((type.includes("done") || type.includes("completed")) && text) {
+      addTranscriptTurn(eventSpeaker(type), text);
+    }
+
+    if (type === "response.done" || type === "response.audio.done") {
+      usePracticeStore.getState().setStatus("listening");
+    }
+
+    if (type === "error") {
+      const error = event.error as { message?: string } | undefined;
+      usePracticeStore.getState().setError(error?.message ?? "Aliyun realtime error.");
+    }
+  };
+
+  socket.onerror = () => {
+    usePracticeStore.getState().setError("阿里实时语音代理连接失败，请确认代理服务已启动。");
+  };
+  socket.onclose = () => {
+    if (usePracticeStore.getState().status !== "error") {
+      usePracticeStore.getState().setStatus("idle");
+    }
+  };
+
+  processor.onaudioprocess = (event) => {
+    if (socket.readyState !== WebSocket.OPEN) return;
+
+    const input = event.inputBuffer.getChannelData(0);
+    const pcm16 = floatTo16BitPcm(downsample(input, inputContext.sampleRate, 16000));
+    socket.send(
+      JSON.stringify({
+        type: "input_audio_buffer.append",
+        audio: arrayBufferToBase64(pcm16.buffer),
+      }),
+    );
+  };
+
+  source.connect(processor);
+  processor.connect(inputContext.destination);
+}
+
+function downsample(input: Float32Array, inputRate: number, outputRate: number) {
+  if (inputRate === outputRate) return input;
+
+  const ratio = inputRate / outputRate;
+  const outputLength = Math.floor(input.length / ratio);
+  const output = new Float32Array(outputLength);
+
+  for (let index = 0; index < outputLength; index += 1) {
+    output[index] = input[Math.floor(index * ratio)] ?? 0;
+  }
+
+  return output;
+}
+
+function floatTo16BitPcm(input: Float32Array) {
+  const output = new Int16Array(input.length);
+
+  for (let index = 0; index < input.length; index += 1) {
+    const sample = Math.max(-1, Math.min(1, input[index] ?? 0));
+    output[index] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+  }
+
+  return output;
+}
+
+function arrayBufferToBase64(buffer: ArrayBufferLike) {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  for (let index = 0; index < bytes.byteLength; index += 1) {
+    binary += String.fromCharCode(bytes[index]);
+  }
+  return btoa(binary);
+}
+
+function base64ToInt16Array(base64: string) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Int16Array(bytes.buffer);
+}
+
+function playPcm16Base64(
+  context: AudioContext,
+  outputState: { nextTime: number },
+  base64: string,
+  sampleRate: number,
+) {
+  const pcm = base64ToInt16Array(base64);
+  const buffer = context.createBuffer(1, pcm.length, sampleRate);
+  const channel = buffer.getChannelData(0);
+
+  for (let index = 0; index < pcm.length; index += 1) {
+    channel[index] = (pcm[index] ?? 0) / 0x8000;
+  }
+
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.connect(context.destination);
+
+  const startAt = Math.max(context.currentTime, outputState.nextTime);
+  source.start(startAt);
+  outputState.nextTime = startAt + buffer.duration;
 }

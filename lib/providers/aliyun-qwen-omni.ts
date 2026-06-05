@@ -6,7 +6,10 @@ import type {
 } from "@/lib/providers/types";
 
 export function getAliyunRealtimeEndpoint() {
-  return process.env.ALIYUN_REALTIME_ENDPOINT?.replace(/\/$/, "");
+  return (
+    process.env.ALIYUN_REALTIME_WS_URL ??
+    "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+  );
 }
 
 export function getAliyunRealtimeModel() {
@@ -14,7 +17,12 @@ export function getAliyunRealtimeModel() {
 }
 
 export function isAliyunRealtimeConfigured() {
-  return Boolean(process.env.DASHSCOPE_API_KEY && getAliyunRealtimeEndpoint());
+  return Boolean(process.env.DASHSCOPE_API_KEY);
+}
+
+export function getAliyunRealtimeProxyUrl() {
+  const port = process.env.REALTIME_PROXY_PORT ?? "3101";
+  return `ws://localhost:${port}/aliyun/realtime`;
 }
 
 export const aliyunQwenOmniProvider: VoiceProvider = {
@@ -33,6 +41,8 @@ export const aliyunQwenOmniProvider: VoiceProvider = {
         expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
         model,
         instructions,
+        transport: "websocket",
+        wsUrl: getAliyunRealtimeProxyUrl(),
       };
     }
 
@@ -44,6 +54,8 @@ export const aliyunQwenOmniProvider: VoiceProvider = {
       expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       model,
       instructions,
+      transport: "websocket",
+      wsUrl: getAliyunRealtimeProxyUrl(),
     };
   },
 };
