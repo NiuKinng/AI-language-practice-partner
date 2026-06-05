@@ -140,6 +140,8 @@ describe("openAiAssessmentProvider pronunciation fusion", () => {
 
     expect(report.scores.pronunciation).toBe(79);
     expect(report.pronunciationDetails?.provider).toBe("tencent-soe");
+    expect(report.pronunciationNotes.join("\n")).toContain("腾讯 SOE 发音评分已纳入报告");
+    expect(report.pronunciationNotes.join("\n")).toContain("建议重点跟读这些词");
     expect(report.pronunciationNotes.join("\n")).toContain("practice");
   });
 });

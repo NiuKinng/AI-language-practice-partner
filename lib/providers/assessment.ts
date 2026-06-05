@@ -14,18 +14,18 @@ const reportShape = {
     vocabulary: 0,
     taskCompletion: 0,
   },
-  summary: "short bilingual summary in Chinese with key English terms where useful",
-  pronunciationNotes: ["2-4 notes"],
-  grammarNotes: ["2-4 notes"],
-  expressionSuggestions: ["3-5 natural alternatives"],
+  summary: "用中文写 2-3 句总结；可以保留必要英文术语",
+  pronunciationNotes: ["2-4 条中文发音建议"],
+  grammarNotes: ["2-4 条中文语法建议"],
+  expressionSuggestions: ["3-5 条英文自然表达替换"],
   corrections: [
     {
       original: "learner sentence",
       improved: "more natural sentence",
-      reason: "brief Chinese explanation",
+      reason: "中文解释为什么这样改",
     },
   ],
-  nextPracticeGoals: ["3 focused goals"],
+  nextPracticeGoals: ["3 条中文下次练习目标"],
 };
 
 function compactTranscript(turns: Parameters<AssessmentProvider["createReport"]>[0]["transcript"]) {
@@ -58,7 +58,7 @@ export const openAiAssessmentProvider: AssessmentProvider = {
         {
           role: "system",
           content:
-            "You are an expert English speaking coach. Return strict JSON only. Score each dimension from 1 to 100. Be specific, kind, and action-oriented. Do not invent phoneme-level claims; use pronunciation notes based on intelligibility and fluency evidence.",
+            "You are an expert English speaking coach. Return strict JSON only. Score each dimension from 1 to 100. Use Chinese for summary, pronunciationNotes, grammarNotes, corrections.reason, and nextPracticeGoals. Keep learner quotes in corrections.original unchanged, and keep corrections.improved / expressionSuggestions in natural English. Be specific, kind, and action-oriented. Do not invent phoneme-level claims; use pronunciation notes based on intelligibility and fluency evidence.",
         },
         {
           role: "user",
@@ -118,7 +118,7 @@ function mergePronunciationDetails(
       `腾讯 SOE 发音评分已纳入报告：准确度 ${pronunciationDetails.accuracy ?? "-"}，流利度 ${pronunciationDetails.fluency ?? "-"}，完整度 ${pronunciationDetails.completion ?? "-"}。`,
       weakWords.length > 0
         ? `建议重点跟读这些词：${weakWords.join(", ")}。`
-        : "本次未识别到明显低分词，可继续保持完整句跟读练习。",
+        : "本次未识别到明显低分词，可以继续保持完整句跟读练习。",
     ],
   };
 }
