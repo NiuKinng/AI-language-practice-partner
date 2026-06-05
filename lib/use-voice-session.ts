@@ -2,6 +2,12 @@
 
 import { useCallback, useRef } from "react";
 import { canSendUserAudio } from "@/lib/audio-gate";
+import {
+  calculateRms,
+  createClientTurnDetectionState,
+  resetClientTurnDetection,
+  updateClientTurnDetection,
+} from "@/lib/client-turn-detector";
 import { getScenario } from "@/lib/scenarios";
 import { usePracticeStore } from "@/lib/store";
 import type { AssessmentReport, TranscriptTurn, VoiceName } from "@/lib/types";
@@ -44,6 +50,17 @@ interface AliyunAudioOutputState {
   isAssistantAudioPlaying: boolean;
   isAssistantResponseComplete: boolean;
   isAssistantResponsePending: boolean;
+}
+
+function requestAssistantResponse(socket: WebSocket, outputState: AliyunAudioOutputState) {
+  outputState.isAssistantResponsePending = true;
+  outputState.isAssistantResponseComplete = false;
+  usePracticeStore.getState().setStatus("thinking");
+  socket.send(
+    JSON.stringify({
+      type: "response.create",
+    }),
+  );
 }
 
 export function useVoiceSession() {
@@ -338,6 +355,7 @@ async function startAliyunWebSocketSession(
   const source = inputContext.createMediaStreamSource(stream);
   const processor = inputContext.createScriptProcessor(4096, 1, 1);
   const socket = new WebSocket(wsUrl.toString());
+  const turnDetectionState = createClientTurnDetectionState();
   const outputState: AliyunAudioOutputState = {
     nextTime: 0,
     sources: new Set<AudioBufferSourceNode>(),
@@ -363,9 +381,7 @@ async function startAliyunWebSocketSession(
           modalities: ["text", "audio"],
           input_audio_format: "pcm16",
           output_audio_format: "pcm16",
-          turn_detection: {
-            type: "server_vad",
-          },
+          turn_detection: null,
         },
       }),
     );
@@ -397,6 +413,7 @@ async function startAliyunWebSocketSession(
       outputState.isAssistantAudioPlaying = true;
       outputState.isAssistantResponsePending = false;
       outputState.isAssistantResponseComplete = false;
+      resetClientTurnDetection(turnDetectionState);
       usePracticeStore.getState().setStatus("speaking");
       await outputContext.resume().catch(() => undefined);
       playPcm16Base64(outputContext, outputState, audioDelta, 24000, () => {
@@ -412,6 +429,7 @@ async function startAliyunWebSocketSession(
     if (type === "response.done" || type === "response.audio.done") {
       outputState.isAssistantResponsePending = false;
       outputState.isAssistantResponseComplete = true;
+      resetClientTurnDetection(turnDetectionState);
       if (outputState.isAssistantAudioPlaying) {
         finishAssistantPlaybackIfReady(outputContext, outputState, socket, true);
       } else {
@@ -454,6 +472,23 @@ async function startAliyunWebSocketSession(
         audio: arrayBufferToBase64(pcm16.buffer),
       }),
     );
+
+    const result = updateClientTurnDetection(
+      turnDetectionState,
+      calculateRms(input),
+      inputContext.currentTime * 1000,
+    );
+    Object.assign(turnDetectionState, result.state);
+
+    if (result.shouldSubmit && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+      requestAssistantResponse(socket, outputState);
+    } else if (
+      result.state.hasValidSpeech &&
+      usePracticeStore.getState().status === "listening"
+    ) {
+      usePracticeStore.getState().setStatus("user_speaking");
+    }
   };
 
   source.connect(processor);

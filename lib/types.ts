@@ -12,6 +12,7 @@ export type ConnectionStatus =
   | "idle"
   | "connecting"
   | "listening"
+  | "user_speaking"
   | "speaking"
   | "thinking"
   | "ending"

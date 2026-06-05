@@ -31,6 +31,7 @@ const statusText = {
   idle: "准备开始",
   connecting: "连接中",
   listening: "现在可以说话",
+  user_speaking: "等待你说完",
   speaking: "AI 回应中，请听完后再说",
   thinking: "等待 AI 开场",
   ending: "生成报告",
@@ -122,8 +123,10 @@ export default function Home() {
   const startDisabled =
     practice.status === "connecting" ||
     practice.status === "listening" ||
+    practice.status === "user_speaking" ||
     practice.status === "speaking";
-  const canSpeakNow = practice.status === "listening";
+  const canSpeakNow = practice.status === "listening" || practice.status === "user_speaking";
+  const waitingForUserToFinish = practice.status === "user_speaking";
   const assistantSpeaking = practice.status === "speaking";
 
   async function clearHistory() {
@@ -278,7 +281,11 @@ export default function Home() {
                         : "bg-slate-100 text-slate-500"
                     }`}
                   >
-                    {canSpeakNow ? "请直接开口，说完后等待 AI 回应。" : "当前不会收录你的声音。"}
+                    {waitingForUserToFinish
+                      ? "可以停顿思考，静音约 3 秒后 AI 回复。"
+                      : canSpeakNow
+                        ? "请直接开口；可以停顿思考，静音约 3 秒后 AI 回复。"
+                        : "当前不会收录你的声音。"}
                   </p>
                 ) : null}
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">
